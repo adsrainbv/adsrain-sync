@@ -27,3 +27,4 @@ export default async function handler(req, res) {
   // Redirect naar Google
   return res.redirect(url.toString());
 }
+
