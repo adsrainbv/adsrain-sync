@@ -1,49 +1,30 @@
 export default async function handler(req, res) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.REDIRECT_URI;
 
-  const code = req.query.code;
-  const state = req.query.state ? JSON.parse(req.query.state) : {};
-  const tenantId = state.tenantId;
-  const returnTo = state.returnTo || '/';
-
-  if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
-
-  try {
-    // Vraag access token aan bij Google
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({
+      error: "Missing environment variables (GOOGLE_CLIENT_ID or REDIRECT_URI)"
     });
-
-    const tokenData = await tokenResponse.json();
-
-    if (tokenData.error) {
-      console.error('Token exchange error:', tokenData);
-      return res.status(400).json({ error: 'Failed to exchange token', details: tokenData });
-    }
-
-    // (Optioneel) log om te zien wat je terugkrijgt
-    console.log('Google OAuth tokens:', tokenData);
-
-    // Hier kun je de tokens opslaan in je database, als je dat wilt
-    // Voor nu: stuur gebruiker terug naar je app
-    const redirectUrl = `${returnTo}?tenantId=${tenantId || ''}&connected=true`;
-
-    return res.redirect(redirectUrl);
-
-  } catch (error) {
-    console.error('OAuth callback error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
+
+  // Maak de Google OAuth URL aan
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'https://www.googleapis.com/auth/adwords openid email profile');
+  url.searchParams.set('access_type', 'offline');
+  url.searchParams.set('prompt', 'consent');
+
+  // Stuur tenantId en returnTo mee als JSON in de state
+  const state = JSON.stringify({
+    tenantId: req.query.tenantId || null,
+    returnTo: req.query.returnTo || '/'
+  });
+  url.searchParams.set('state', state);
+
+  // Redirect naar Google
+  return res.redirect(url.toString());
 }
+
